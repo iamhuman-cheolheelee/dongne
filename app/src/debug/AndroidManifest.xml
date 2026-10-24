@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <!-- adb 로 아침 안내·새로고침을 시험하는 훅. debug 빌드에만 합쳐진다 -->
+        <receiver android:name=".DebugReceiver" android:exported="true" />
+    </application>
+</manifest>

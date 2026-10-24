@@ -1,0 +1,34 @@
+# Gradle / Android Studio
+.gradle/
+.kotlin/
+build/
+app/build/
+.idea/
+*.iml
+captures/
+.externalNativeBuild/
+.cxx/
+
+# 로컬 경로 (sdk.dir 에 사용자 홈 경로가 들어간다)
+local.properties
+
+# 서명 키 — 절대 커밋하지 않는다
+*.jks
+*.keystore
+keystore.properties
+signing.properties
+
+# 빌드 산출물
+*.apk
+*.aab
+*.ap_
+*.dex
+output-metadata.json
+
+# 비밀값
+.env
+.env.*
+secrets.properties
+
+# OS
+.DS_Store

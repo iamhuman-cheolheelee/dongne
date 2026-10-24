@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@android:id/background" android:layout_width="match_parent" android:layout_height="match_parent"
+    android:background="@drawable/bg_day" android:orientation="horizontal" android:gravity="center_vertical" android:paddingStart="14dp" android:paddingEnd="14dp">
+    <TextView android:id="@+id/icon" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textSize="28sp" />
+    <TextView android:id="@+id/temp" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="4dp" android:textColor="#FFFFFF" android:textSize="32sp" android:fontFamily="sans-serif-light" />
+    <LinearLayout android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:layout_marginStart="10dp" android:orientation="vertical">
+        <TextView android:id="@+id/cond" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#FFFFFF" android:textSize="13sp" android:textStyle="bold" android:maxLines="1" />
+        <TextView android:id="@+id/summary" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#EEFFFFFF" android:textSize="12sp" android:maxLines="1" android:ellipsize="end" />
+    </LinearLayout>
+    <LinearLayout android:id="@+id/refresh" android:layout_width="wrap_content" android:layout_height="wrap_content" android:gravity="end" android:orientation="vertical">
+        <TextView android:id="@+id/hilo_s" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#FFFFFF" android:textSize="12sp" />
+        <TextView android:id="@+id/aq" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#FFFFFF" android:textSize="11sp" />
+    </LinearLayout>
+</LinearLayout>

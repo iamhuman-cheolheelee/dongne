@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- 선택: 앱을 열지 않아도 위젯·아침 안내가 지금 위치를 따라가도록. 앱이 먼저 요청하지 않는다 -->
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- 아침 7:00 정각. 사용자가 '알람 및 리마인더'를 허용해야 하며, 없으면 몇 분 늦을 수 있는 예약으로 대신한다.
+         USE_EXACT_ALARM 은 Play 정책상 알람·캘린더 앱 전용이라 쓰지 않는다 -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <application android:label="오늘날씨" android:icon="@drawable/ic_app"
+        android:allowBackup="false"
+        android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
+        <activity android:name=".MainActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <!-- 런처가 불러야 해서 exported. 앱 내부 동작은 받지 않는다(WidgetActions) -->
+        <receiver android:name=".GlanceWidget" android:exported="true" android:label="오늘날씨 한눈에">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_info" />
+        </receiver>
+        <receiver android:name=".WidgetActions" android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
+            </intent-filter>
+        </receiver>
+        <receiver android:name=".MorningReceiver" android:exported="false" />
+    </application>
+</manifest>
