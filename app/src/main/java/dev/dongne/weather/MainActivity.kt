@@ -61,6 +61,7 @@ class MainActivity : Activity() {
         body.removeAllViews()
         window.decorView.setBackgroundResource(Wx.bg(s.code, s.isDay).let { if (it == R.drawable.bg_day) R.drawable.bg_day else it })
         body.addView(text(s.place, 18f, bold = true))
+        if (s.warnings.isNotEmpty()) body.addView(text("기상청 특보: " + s.warnings.joinToString(", ") + " 발효 중", 15f, 0xFFFFD27A.toInt(), bold = true))
         body.addView(LinearLayout(this).apply {
             gravity = Gravity.CENTER_VERTICAL
             addView(text(Wx.emoji(s.code, s.isDay), 64f))
@@ -107,7 +108,7 @@ class MainActivity : Activity() {
                 addView(text("${d.max}°", 15f, bold = true).apply { gravity = Gravity.END; width = px(40) })
             }
         }
-        body.addView(card(text("7일 예보", 12f, 0xAAFFFFFF.toInt()), *week.toTypedArray()))
+        body.addView(card(text("${s.days.size}일 예보", 12f, 0xAAFFFFFF.toInt()), *week.toTypedArray()))
 
         // 오늘 옷차림
         val now = java.time.LocalDateTime.now()
@@ -173,6 +174,6 @@ class MainActivity : Activity() {
                 }
             })
         })
-        body.addView(text("업데이트 " + SimpleDateFormat("M/d HH:mm", Locale.KOREA).format(Date(s.fetchedAt)) + " · ${s.source}" + (if (s.airSource.isNotEmpty()) " · 대기질 ${s.airSource}" else "") + " · Weather data by Open-Meteo.com (CC BY 4.0) · 광고 없음", 11f, 0x88FFFFFF.toInt()).apply { setPadding(0, px(10), 0, 0) })
+        body.addView(text("업데이트 " + SimpleDateFormat("M/d HH:mm", Locale.KOREA).format(Date(s.fetchedAt)) + " · ${s.source}" + (if (s.observed) " · 현재 기온 기상청 관측" else "") + (if (s.airSource.isNotEmpty()) " · 대기질 ${s.airSource}" else "") + " · Weather data by Open-Meteo.com (CC BY 4.0) · 광고 없음", 11f, 0x88FFFFFF.toInt()).apply { setPadding(0, px(10), 0, 0) })
     }
 }

@@ -37,17 +37,30 @@ class GlanceWidget : AppWidgetProvider() {
             Intent(c, WidgetActions::class.java).setAction(WidgetActions.REFRESH).putExtra(WidgetActions.FORCE, force),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
 
-        /** 30분마다(기기가 깨어 있을 때) 갱신 — updatePeriodMillis 보다 촘촘하고 배터리 친화 */
-        fun schedule(c: Context) {
-            c.getSystemService(AlarmManager::class.java).setInexactRepeating(AlarmManager.ELAPSED_REALTIME,
-                SystemClock.elapsedRealtime() + AlarmManager.INTERVAL_HALF_HOUR, AlarmManager.INTERVAL_HALF_HOUR, refreshIntent(c))
+        /** 다음 갱신까지: 비·눈이 2시간 안이면 15분, 밤(0~5시)·절전 중이면 2시간, 그 외 30분 */
+        fun interval(s: Snapshot?, hour: Int, powerSave: Boolean): Long = when {
+            s != null && Next.upcoming(s, within = 2) != null && !powerSave -> 15 * Net.MIN
+            hour in 0..5 || powerSave -> 2 * Net.HOUR
+            else -> 30 * Net.MIN
+        }
+
+        /** 갱신이 끝날 때마다 다음 한 번을 예약한다(반복 알람 대신). 기기가 잠들어 있으면 깨우지 않고 깬 뒤에 */
+        fun schedule(c: Context, s: Snapshot? = Repo.cached(c)) {
+            val ms = interval(s, java.time.LocalTime.now().hour, c.getSystemService(android.os.PowerManager::class.java).isPowerSaveMode)
+            val am = c.getSystemService(AlarmManager::class.java)
+            // 이전 버전이 GlanceWidget 앞으로 걸어 둔 30분 반복 알람(업데이트해도 남는다)
+            PendingIntent.getBroadcast(c, 1, Intent(c, GlanceWidget::class.java).setAction("dev.dongne.weather.REFRESH"),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_NO_CREATE)?.let { am.cancel(it); it.cancel() }
+            am.setWindow(AlarmManager.ELAPSED_REALTIME,
+                SystemClock.elapsedRealtime() + ms, ms / 4, refreshIntent(c))
         }
 
         /** force: 사용자가 누른 새로고침. 주기 갱신은 출처별 캐시를 따른다 */
         fun refresh(c: Context, pending: PendingResult? = null, force: Boolean = false) {
             Thread {
-                runCatching { Repo.fetch(c, force).also { render(c, it); Alerts.danger(c, it); Alerts.rainSoon(c, it) } }
-                    .onFailure { Repo.cached(c)?.let { render(c, it, failed = true) } }
+                val s = runCatching { Repo.fetch(c, force).also { render(c, it); Alerts.danger(c, it); Alerts.rainSoon(c, it) } }
+                    .getOrElse { Repo.cached(c)?.also { render(c, it, failed = true) } }
+                schedule(c, s)
                 pending?.finish()
             }.start()
         }
@@ -86,6 +99,9 @@ class GlanceWidget : AppWidgetProvider() {
             val v = RemoteViews(c.packageName, layout)
             v.setInt(android.R.id.background, "setBackgroundResource", Wx.bg(s.code, s.isDay))
             v.setTextViewText(R.id.icon, Wx.emoji(s.code, s.isDay))
+            // 이모지는 화면 낭독기가 '해 그림' 처럼 읽는다 — 날씨 낱말로
+            v.setContentDescription(R.id.icon, Wx.text(s.code))
+            v.setContentDescription(R.id.refresh, "새로고침")
             v.setTextViewText(R.id.temp, "${s.temp}°")
             v.setTextViewText(R.id.cond, "${Wx.text(s.code)} · 체감 ${s.feels}°")
             v.setTextViewText(R.id.hilo, "최고 ${s.max}° 최저 ${s.min}° · 습도 ${s.humidity}%")
@@ -98,6 +114,7 @@ class GlanceWidget : AppWidgetProvider() {
                 val (t, ic, tc, p) = HOUR_IDS[k].map { c.resources.getIdentifier(it, "id", c.packageName) }
                 v.setTextViewText(t, if (h.hour == 0) "자정" else "${h.hour}시")
                 v.setTextViewText(ic, Wx.emoji(h.code, h.day))
+                v.setContentDescription(ic, Wx.text(h.code))
                 v.setTextViewText(tc, "${h.temp}°")
                 v.setTextViewText(p, if (h.pop >= 20) "${h.pop}%" else "")
             }
@@ -113,6 +130,7 @@ class GlanceWidget : AppWidgetProvider() {
                 fun id(x: String) = c.resources.getIdentifier("d$k$x", "id", c.packageName)
                 v.setTextViewText(id("l"), d.label)
                 v.setTextViewText(id("i"), Wx.emoji(d.code))
+                v.setContentDescription(id("i"), Wx.text(d.code))
                 v.setTextViewText(id("p"), if (d.pop >= 20) "${d.pop}%" else "")
                 v.setTextViewText(id("r"), "${d.min}° / ${d.max}°")
             }

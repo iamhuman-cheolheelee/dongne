@@ -24,8 +24,13 @@ data class Coord(val lat: Double, val lon: Double) {
 /** 지역 출처의 한 시간. code 는 WMO 날씨 코드(-1 = 모름) */
 data class LocalHour(val date: String, val hour: Int, val code: Int, val temp: Int, val feels: Int,
                      val pop: Int, val rh: Int, val wind: Double)
-data class LocalDay(val date: String, val min: Int?, val max: Int?)
-data class LocalForecast(val source: String, val hours: List<LocalHour>, val days: List<LocalDay>)
+/** code·pop: 오전/오후 날씨 중 나쁜 쪽·높은 쪽(-1 = 모름). 중기(4~10일)는 이것만 있다 */
+data class LocalDay(val date: String, val min: Int?, val max: Int?, val code: Int = -1, val pop: Int = -1)
+
+/** 지역 출처의 현재 관측(실측). 특보는 이 좌표에 지금 발효 중인 것 */
+data class LocalNow(val temp: Double, val feels: Double?, val rh: Int?, val wind: Double?, val rain1h: Double?,
+                    val warnings: List<String>, val pm10: Int?, val pm25: Int?, val station: String?)
+data class LocalForecast(val source: String, val hours: List<LocalHour>, val days: List<LocalDay>, val now: LocalNow? = null)
 
 data class Air(val pm10: Int, val pm25: Int, val source: String)
 
@@ -43,7 +48,8 @@ interface AirSource {
 
 object Sources {
     val local: List<LocalSource> = listOf(Kma)
-    val air: List<AirSource> = listOf(OpenMeteoAir)
+    // 국내는 측정소 실측(에어코리아) 먼저, 실패·해외는 CAMS 모델
+    val air: List<AirSource> = listOf(KmaAir, OpenMeteoAir)
 
     fun <S, T> first(list: List<S>, covers: (S) -> Boolean, fetch: (S) -> T?): T? =
         list.asSequence().filter(covers).mapNotNull { runCatching { fetch(it) }.getOrNull() }.firstOrNull()
@@ -60,7 +66,7 @@ object OpenMeteo {
             "&hourly=temperature_2m,apparent_temperature,precipitation_probability,weather_code,is_day,relative_humidity_2m,wind_speed_10m" +
             "&past_hours=1&forecast_hours=26" +
             "&daily=weather_code,temperature_2m_max,temperature_2m_min,apparent_temperature_max,precipitation_probability_max,uv_index_max,sunrise,sunset" +
-            "&timezone=auto&past_days=1&forecast_days=7&wind_speed_unit=ms",
+            "&timezone=auto&past_days=1&forecast_days=10&wind_speed_unit=ms",
         ttl = TTL, force = force)
 }
 

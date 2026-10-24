@@ -14,4 +14,21 @@ class NextTest {
     @Test fun span() = assertEquals("09~10시 비", Next.upcoming(snap(listOf(10, 30, 70, 60, 20) + List(8) { 0 }))!!.range)
     @Test fun snow() = assertEquals("08시 눈 시작 (40%)",
         Next.change(snap(listOf(10, 40, 10) + List(10) { 0 }, listOf(3, 73, 3) + List(10) { 3 })))
+
+    // ---- 갱신 주기·상태바 아이콘 ----
+
+    @Test fun refreshFasterBeforeRain() {
+        val wet = snap(listOf(10, 70) + List(11) { 0 }); val dry = snap(List(13) { 10 })
+        assertEquals(15 * Net.MIN, GlanceWidget.interval(wet, 14, false))
+        assertEquals(30 * Net.MIN, GlanceWidget.interval(dry, 14, false))
+        assertEquals(2 * Net.HOUR, GlanceWidget.interval(dry, 3, false))
+        assertEquals(2 * Net.HOUR, GlanceWidget.interval(wet, 14, true))
+    }
+
+    @Test fun warningPicksIcon() {
+        val dry = snap(List(13) { 10 })
+        assertEquals(R.drawable.sb_cloud, StatusIcon.glyph(dry, 14))
+        assertEquals(R.drawable.sb_emergency_heat, StatusIcon.glyph(dry.copy(warnings = listOf("폭염주의보")), 14))
+        assertEquals(R.drawable.sb_air, StatusIcon.glyph(dry.copy(warnings = listOf("강풍주의보")), 14))
+    }
 }

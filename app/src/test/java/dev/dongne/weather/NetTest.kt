@@ -39,4 +39,17 @@ class NetTest {
         val net = Net(dir); seed(net, bad, "ancient", 7 * Net.HOUR)
         net.get(bad, ttl = 20 * Net.MIN, maxStale = 6 * Net.HOUR, timeout = 500)
     }
+
+    @Test fun forceReusesFetchFinishedWhileWaiting() {
+        // 다른 호출이 방금(요청 이후) 받아 둔 파일이면 force 여도 다시 받지 않는다
+        val net = Net(dir); seed(net, bad, "just now", 0)
+        val r = net.get(bad, ttl = Net.HOUR, force = true, timeout = 500)
+        assertEquals("just now", r.body); assertFalse(r.stale)
+    }
+
+    @Test fun cleanupDropsOldFiles() {
+        val net = Net(dir); seed(net, "http://old/", "x", 8 * Net.DAY); seed(net, bad, "cached", Net.MIN)
+        net.get(bad, ttl = Net.HOUR)
+        assertEquals(setOf("cached"), dir.listFiles()!!.filter { !it.name.startsWith(".") }.map { it.readText() }.toSet())
+    }
 }

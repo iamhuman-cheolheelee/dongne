@@ -1,0 +1,12 @@
+An ad-free, tracker-free weather widget focused on Korea. No server, no account, no API key: the phone asks the Korea Meteorological Administration (KMA) and Open-Meteo directly.
+
+<ul>
+<li>Resizable widget, from 1×1 up to full screen</li>
+<li>One status-bar icon for the current situation (rain, snow, sleet, thunder, heat, cold, wind, fine dust, clear)</li>
+<li>7 AM briefing: when it rains and what to wear, conclusion first</li>
+<li>Rain/snow heads-up 1–2 hours ahead, and official KMA weather warnings with safety tips</li>
+<li>Observed temperature and AirKorea station PM10/PM2.5</li>
+<li>10-day forecast; adaptive refresh (15 min before rain, 2 h at night or in battery saver)</li>
+</ul>
+
+Outside Korea it uses Open-Meteo (CC BY 4.0) and Copernicus CAMS air quality. UI is in Korean.

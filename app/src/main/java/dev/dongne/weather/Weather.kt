@@ -31,6 +31,10 @@ data class Snapshot(
     /** 어제→오늘 최저기온 하강폭. 같은 출처(Open-Meteo) 두 값의 차이라 출처 섞임 오차가 없다 */
     val drop: Int = 0,
     val airSource: String = "",
+    /** 지금 이 위치에 발효 중인 기상청 특보(예: "폭염주의보"). 국내·조회 성공 시에만 */
+    val warnings: List<String> = emptyList(),
+    /** 현재 기온·체감이 관측소 실측이면 true(예보값이면 false) */
+    val observed: Boolean = false,
 ) {
     /** 대기질을 못 받았으면 pm10·pm25 = -1 (등급 0 으로 두되 '정보 없음'으로 표시) */
     val aqKnown: Boolean get() = pm10 >= 0 && pm25 >= 0
@@ -46,6 +50,8 @@ data class Snapshot(
         o.rain?.let { tips += it.substringBefore(" (") }
         tips += o.headline
         if (aqGrade >= 2) tips += "미세먼지 $aqText"
+        // 실제 발효 중인 특보가 가장 먼저
+        if (warnings.isNotEmpty()) tips.add(0, warnings.joinToString("·") + " 발효")
         return tips.take(2).joinToString(" · ")
     }
 
@@ -57,6 +63,7 @@ data class Snapshot(
             .put("p", it.pop).put("d", it.day).put("rh", it.rh).put("w", it.wind).put("f", it.feels) }))
         put("days", org.json.JSONArray(days.map { JSONObject().put("l", it.label).put("c", it.code).put("x", it.max).put("n", it.min).put("p", it.pop).put("f", it.feelsMax) }))
         put("yMin", yMin); put("source", source); put("drop", drop); put("airSource", airSource)
+        put("warnings", warnings.joinToString(",")); put("observed", observed)
     }.toString()
 
     companion object {
@@ -69,7 +76,8 @@ data class Snapshot(
                 (0 until hs.length()).map { hs.getJSONObject(it).run { Hour(getString("l"), getInt("h"), getInt("t"), getInt("c"), getInt("p"), getBoolean("d"), optInt("rh", 50), optDouble("w", 1.0), optInt("f", getInt("t"))) } },
                 (0 until ds.length()).map { ds.getJSONObject(it).run { Day(getString("l"), getInt("c"), getInt("x"), getInt("n"), getInt("p"), optInt("f", getInt("x"))) } },
                 getLong("fetchedAt"), optInt("yMin", getInt("min")), optString("source", OpenMeteo.NAME),
-                optInt("drop", 0), optString("airSource", ""))
+                optInt("drop", 0), optString("airSource", ""),
+                optString("warnings", "").split(",").filter { it.isNotBlank() }, optBoolean("observed", false))
         }
     }
 }
@@ -218,9 +226,11 @@ object Repo {
                 dcol("apparent_temperature_max").getDouble(i).roundToInt())
             val k = kd[dt.getString(i)] ?: return@map base
             val hs = local!!.hours.filter { it.date == dt.getString(i) }
+            // 시간별이 있는 날(단기)은 시간별에서, 없는 날(중기 4~10일)은 기상청 오전·오후 값에서
             base.copy(max = k.max ?: base.max, min = k.min ?: base.min,
-                pop = hs.maxOfOrNull { it.pop } ?: base.pop,
-                code = hs.filter { it.hour in 6..21 }.map { it.code }.maxOrNull()?.takeIf { it >= 0 } ?: base.code,
+                pop = hs.maxOfOrNull { it.pop } ?: k.pop.takeIf { it >= 0 } ?: base.pop,
+                code = hs.filter { it.hour in 6..21 }.map { it.code }.maxOrNull()?.takeIf { it >= 0 }
+                    ?: k.code.takeIf { it >= 0 } ?: base.code,
                 // 체감 최고도 같은 출처(기상청 시간별 체감)에서 — 기온은 기상청, 체감은 다른 모델인 섞임을 막는다
                 feelsMax = hs.maxOfOrNull { it.feels } ?: base.feelsMax)
         }
@@ -235,10 +245,16 @@ object Repo {
         val cWind = if (curFresh) cur.getDouble("wind_speed_10m") else col("wind_speed_10m").optDouble(start, 1.0)
         val cDay = if (curFresh) cur.getInt("is_day") == 1 else col("is_day").getInt(start) == 1
         val yMin = dcol("temperature_2m_min").getDouble(y).roundToInt()
+        // 현재값 우선순위: 관측소 실측 > 지역 예보의 이번 시각 > 기본 예보
+        val obs = local?.now
+        val fcCode = kNow?.code?.takeIf { it >= 0 } ?: cCode
+        // 지금 비가 실제로 내리고 있는데(1시간 강수량 > 0) 예보 날씨가 맑음·흐림이면 약한 비로 고친다
+        val code = if ((obs?.rain1h ?: 0.0) > 0 && fcCode < 51) 61 else fcCode
         return Snapshot(place,
-            kNow?.temp ?: cTemp.roundToInt(), kNow?.feels ?: cFeels.roundToInt(),
-            kNow?.code?.takeIf { it >= 0 } ?: cCode, cDay,
-            kNow?.rh ?: cRh, kNow?.wind ?: cWind,
+            obs?.temp?.roundToInt() ?: kNow?.temp ?: cTemp.roundToInt(),
+            obs?.let { (it.feels ?: it.temp).roundToInt() } ?: kNow?.feels ?: cFeels.roundToInt(),
+            code, cDay,
+            obs?.rh ?: kNow?.rh ?: cRh, obs?.wind ?: kNow?.wind ?: cWind,
             days[0].max, days[0].min, dcol("temperature_2m_max").getDouble(y).roundToInt(),
             dcol("uv_index_max").optDouble(today, 0.0),
             dcol("sunrise").getString(today).takeLast(5), dcol("sunset").getString(today).takeLast(5),
@@ -246,6 +262,7 @@ object Repo {
             hours, days, fetchedAt, yMin,
             local?.source ?: OpenMeteo.NAME,
             drop = yMin - dcol("temperature_2m_min").getDouble(today).roundToInt(),
-            airSource = air?.source ?: "")
+            airSource = air?.source ?: "",
+            warnings = obs?.warnings ?: emptyList(), observed = obs != null)
     }
 }

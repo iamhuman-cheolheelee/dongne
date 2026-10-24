@@ -59,27 +59,45 @@ object Alerts {
         notify(c, 100, CH_MORNING, title, short, body, until = 22)
     }
 
-    /** 위험 기온: 하루에 종류별 한 번만 */
+    /** 발효 중 특보별 행동 요령(행정안전부 국민행동요령 요지) */
+    private val ACTION = mapOf(
+        "폭염" to "12~17시 야외활동 피하기. 물 15~20분마다 한 컵. 어지럼·두통 시 바로 시원한 곳에서 휴식",
+        "한파" to "외출 최소화. 모자·장갑·목도리. 수도관 동파 주의",
+        "호우" to "하천·지하차도·저지대 피하기. 외출 시 우산·방수 신발",
+        "대설" to "대중교통 이용. 미끄럼 주의, 밑창 깊은 신발",
+        "강풍" to "간판·공사장 주변 피하기. 우산 대신 우비",
+        "태풍" to "외출 자제. 창문 고정, 하천·해안 접근 금지",
+        "건조" to "불씨 관리. 실내 습도 40~60%",
+        "황사" to "KF80 이상 마스크. 외출 후 손·얼굴 씻기",
+    )
+
+    /** 기상청 특보(발효 중) 우선, 없으면 예보로 판단한 위험 기온. 하루에 종류별 한 번만 */
     fun danger(c: Context, s: Snapshot) {
+        val p = c.getSharedPreferences("wx", Context.MODE_PRIVATE)
+        val today = LocalDate.now(SEOUL).toString()
+        fun once(key: String) = (p.getString("sent_$key", null) != today).also { if (it) p.edit().putString("sent_$key", today).apply() }
+        s.warnings.forEach { w ->
+            val kind = w.removeSuffix("주의보").removeSuffix("경보")
+            if (once("wrn_$w")) notify(c, 250 + Math.floorMod(w.hashCode(), 40), "$w 발효 중 · ${s.place}",
+                (ACTION[kind] ?: "기상청 특보를 확인하세요") + ". (출처: 기상청 특보)")
+        }
+        val official = s.warnings.map { it.take(2) }.toSet()
         val d = s.days; if (d.size < 2) return
         val (t, n) = d[0] to d[1]
         val drop = s.drop
         val msg = when {
-            t.feelsMax >= 35 && n.feelsMax >= 35 -> Triple("heat2", "폭염경보 기준 초과: 체감 ${t.feelsMax}°",
+            "폭염" in official || "한파" in official -> null // 실제 특보 알림으로 갈음
+            t.feelsMax >= 35 && n.feelsMax >= 35 -> Triple("heat2", "예보 기준 폭염경보 수준: 체감 ${t.feelsMax}°",
                 "12~17시 야외활동 피하기. 물 15~20분마다 한 컵. 어지럼·두통 시 바로 시원한 곳에서 휴식. (기준: 체감 35° 이상 2일)")
-            t.feelsMax >= 33 && n.feelsMax >= 33 -> Triple("heat1", "폭염주의보 기준: 체감 ${t.feelsMax}°",
+            t.feelsMax >= 33 && n.feelsMax >= 33 -> Triple("heat1", "예보 기준 폭염주의보 수준: 체감 ${t.feelsMax}°",
                 "한낮엔 그늘에서 쉬기. 물 자주 마시기. (기준: 체감 33° 이상 2일)")
-            (t.min <= -15 && n.min <= -15) || (drop >= 15 && t.min <= 3) -> Triple("cold2", "한파경보 기준: 아침 ${t.min}°${if (drop >= 10) ", 어제보다 ${drop}° 하락" else ""}",
+            (t.min <= -15 && n.min <= -15) || (drop >= 15 && t.min <= 3) -> Triple("cold2", "예보 기준 한파경보 수준: 아침 ${t.min}°${if (drop >= 10) ", 어제보다 ${drop}° 하락" else ""}",
                 "외출 최소화. 모자·장갑·목도리 필수. 수도관 동파 주의. (기준: 최저 -15° 이하 2일 또는 15° 이상 급강하)")
-            (t.min <= -12 && n.min <= -12) || (drop >= 10 && t.min <= 3) -> Triple("cold1", "한파주의보 기준: 아침 ${t.min}°${if (drop >= 10) ", 어제보다 ${drop}° 하락" else ""}",
+            (t.min <= -12 && n.min <= -12) || (drop >= 10 && t.min <= 3) -> Triple("cold1", "예보 기준 한파주의보 수준: 아침 ${t.min}°${if (drop >= 10) ", 어제보다 ${drop}° 하락" else ""}",
                 "겹쳐 입기. 목도리·장갑 챙기기. (기준: 최저 -12° 이하 2일 또는 10° 이상 급강하)")
             else -> null
         } ?: return
-        val p = c.getSharedPreferences("wx", Context.MODE_PRIVATE)
-        val key = "sent_${msg.first}"; val today = LocalDate.now(SEOUL).toString()
-        if (p.getString(key, null) == today) return
-        p.edit().putString(key, today).apply()
-        notify(c, 200 + msg.first.hashCode() % 50, msg.second, msg.third)
+        if (once(msg.first)) notify(c, 200 + Math.floorMod(msg.first.hashCode(), 50), msg.second, msg.third)
     }
 
     /** 비·눈이 1~2시간 안에 시작하면 한 번(구간 시작 시각마다). 6~22시만 */
@@ -100,7 +118,7 @@ object Alerts {
     }
 
     private fun channels(nm: NotificationManager) = nm.createNotificationChannels(listOf(
-        NotificationChannel(CH, "위험 기상(폭염·한파 특보 기준)", NotificationManager.IMPORTANCE_HIGH),
+        NotificationChannel(CH, "기상 특보·위험 기온", NotificationManager.IMPORTANCE_HIGH),
         NotificationChannel(CH_MORNING, "아침 7시 옷차림·비 안내", NotificationManager.IMPORTANCE_DEFAULT),
         NotificationChannel(CH_RAIN, "비·눈 시작 1~2시간 전", NotificationManager.IMPORTANCE_DEFAULT),
     ))

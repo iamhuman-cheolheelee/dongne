@@ -21,6 +21,7 @@ object StatusIcon {
     fun glyph(s: Snapshot, hour: Int = java.time.LocalTime.now().hour): Int {
         val c = s.code
         val feelsMax = s.days.firstOrNull()?.feelsMax ?: s.max
+        fun warned(k: String) = s.warnings.any { it.startsWith(k) }
         return when {
             c >= 95 -> R.drawable.sb_thunderstorm
             c in 71..77 || c == 85 || c == 86 -> R.drawable.sb_weather_snowy
@@ -28,6 +29,12 @@ object StatusIcon {
             c == 65 || c == 82 || c == 81 || c == 63 -> R.drawable.sb_rainy_heavy
             c in 51..55 || c == 61 || c == 80 -> R.drawable.sb_rainy
             c in 51..82 -> R.drawable.sb_rainy
+            // 지금 내리지 않아도 특보가 발효 중이면 그 위험을 먼저
+            warned("호우") -> R.drawable.sb_rainy_heavy
+            warned("대설") -> R.drawable.sb_weather_snowy
+            warned("폭염") -> R.drawable.sb_emergency_heat
+            warned("한파") -> R.drawable.sb_severe_cold
+            warned("태풍") || warned("강풍") -> R.drawable.sb_air
             s.feels >= 31 || (feelsMax >= 33 && hour in 9..18) -> R.drawable.sb_emergency_heat
             s.feels <= -10 || (s.min <= -12 && hour < 12) -> R.drawable.sb_severe_cold
             Next.upcoming(s, within = 3) != null -> R.drawable.sb_umbrella
@@ -49,7 +56,10 @@ object StatusIcon {
         val now = java.time.LocalDateTime.now()
         val n = Notification.Builder(c, CH)
             .setSmallIcon(Icon.createWithResource(c, glyph(s)))
-            .setContentTitle("${s.temp}° ${Wx.text(s.code)} · 최고 ${s.max}° 최저 ${s.min}° · 체감 ${s.feels}°")
+            .setContentTitle((if (s.warnings.isNotEmpty()) s.warnings.joinToString("·") + " · " else "") +
+                "${s.temp}° ${Wx.text(s.code)} · 최고 ${s.max}° 최저 ${s.min}° · 체감 ${s.feels}°")
+            // 접근성 서비스가 읽는 요약(아이콘만으로는 날씨를 알 수 없다)
+            .setTicker("${s.place} ${s.temp}도 ${Wx.text(s.code)}, ${Next.change(s)}")
             .setContentText("${Next.change(s)} · ${Outfits.plan(s, now.monthValue, now.hour).headline}")
             // 펼치면 2시간 간격 12시간. 날씨는 '주변 정보'라 Live Update(승격 알림) 대상이 아니다 — 일반 상시 알림 유지
             .setStyle(Notification.BigTextStyle().bigText(

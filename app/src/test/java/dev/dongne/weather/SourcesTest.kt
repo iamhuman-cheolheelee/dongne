@@ -94,4 +94,42 @@ class SourcesTest {
         val s = Repo.build(openMeteo(), null, Air(10, 5, "CAMS 모델"), "둔산동", 123L, nowMs)
         assertEquals(s, Snapshot.fromJson(s.toJson()))
     }
+
+    // ---- 날씨누리 현재 날씨(관측·특보·측정소) / 일별 슬라이드(중기 포함) ----
+
+    @Test fun kmaParsesCurrentObservation() {
+        val n = Kma.parseNow(javaClass.getResource("/kma_current.html")!!.readText())!!
+        assertEquals(15.1, n.temp, 1e-9); assertEquals(15.1, n.feels!!, 1e-9)
+        assertEquals(98, n.rh); assertEquals(0.9, n.wind!!, 1e-9)
+        assertEquals(emptyList<String>(), n.warnings)
+        assertEquals(5, n.pm25); assertEquals(17, n.pm10); assertEquals("둔산동측정소", n.station)
+    }
+
+    @Test fun kmaParsesWarnings() {
+        val html = """<span class="tmp">33.0<small>℃</small></span><div class="cmp-impact-fct" data-impact-fct="">
+            <a>대전: 폭염경보</a> <a>강풍 주의보</a> <a>폭염경보</a></div>"""
+        assertEquals(listOf("폭염경보", "강풍주의보"), Kma.parseNow(html)!!.warnings)
+    }
+
+    @Test fun kmaParsesDailySlidesIncludingMidTerm() {
+        val days = Kma.parseDaily(javaClass.getResource("/kma_daily.html")!!.readText())
+        assertEquals(7, days.size)
+        assertEquals("2026-10-25", days.first().date)
+        assertEquals(LocalDay("2026-10-30", 10, 21, 63, 60), days.first { it.date == "2026-10-30" })
+    }
+
+    @Test fun buildUsesObservationAndMidTermDays() {
+        val obs = LocalNow(-3.4, -8.0, 80, 5.5, 0.5, listOf("한파주의보"), 30, 12, "둔산동측정소")
+        val local = LocalForecast("기상청 동네예보",
+            (7..23).map { LocalHour("2026-01-15", it, 1, -4, -10, 30, 70, 4.0) },
+            listOf(LocalDay("2026-01-15", -11, 0), LocalDay("2026-01-19", -7, 2, 71, 70)), obs)
+        val s = Repo.build(openMeteo(), local, null, "둔산동", 0L, nowMs)
+        // 현재: 관측값, 비가 오고 있으니 맑음 예보를 약한 비로
+        assertEquals(-3, s.temp); assertEquals(-8, s.feels); assertEquals(80, s.humidity); assertEquals(61, s.code)
+        assertEquals(listOf("한파주의보"), s.warnings); assertTrue(s.observed)
+        // 4일 뒤(시간별 없음): 기상청 중기 값
+        val d = s.days[4]
+        assertEquals(-7, d.min); assertEquals(2, d.max); assertEquals(71, d.code); assertEquals(70, d.pop)
+        assertTrue(s.summary().startsWith("한파주의보 발효"))
+    }
 }
