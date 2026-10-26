@@ -1,0 +1,1 @@
+Tablet, unfolded and landscape layouts: centered readable width; no reload on rotation.

@@ -25,8 +25,16 @@ class MainActivity : Activity() {
 
     override fun onCreate(b: Bundle?) {
         super.onCreate(b)
-        body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(px(18), px(36), px(18), px(28)) }
-        setContentView(ScrollView(this).apply { addView(body) })
+        // 태블릿·폴드 펼침·가로 화면: 글줄이 너무 길어지지 않게 가운데 640dp 폭으로 묶는다
+        body = object : LinearLayout(this) {
+            override fun onMeasure(w: Int, h: Int) {
+                val max = px(640)
+                super.onMeasure(if (MeasureSpec.getSize(w) > max) MeasureSpec.makeMeasureSpec(max, MeasureSpec.EXACTLY) else w, h)
+            }
+        }.apply { orientation = LinearLayout.VERTICAL; setPadding(px(18), px(36), px(18), px(28)) }
+        setContentView(ScrollView(this).apply {
+            addView(body, android.widget.FrameLayout.LayoutParams(-1, -2, android.view.Gravity.CENTER_HORIZONTAL))
+        })
         Repo.cached(this)?.let(::show) ?: body.addView(text("불러오는 중…", 18f))
         if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != 0)
             { asked(); asked("notif"); requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.POST_NOTIFICATIONS), 1) }
