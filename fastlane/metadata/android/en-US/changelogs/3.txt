@@ -1,0 +1,1 @@
+Shows hints with shortcuts when location is denied or not set to "Allow all the time", and when notifications or battery optimization block updates.

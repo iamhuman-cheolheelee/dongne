@@ -29,13 +29,61 @@ class MainActivity : Activity() {
         setContentView(ScrollView(this).apply { addView(body) })
         Repo.cached(this)?.let(::show) ?: body.addView(text("불러오는 중…", 18f))
         if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != 0)
-            requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.POST_NOTIFICATIONS), 1)
+            { asked(); asked("notif"); requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.POST_NOTIFICATIONS), 1) }
         else load()
         GlanceWidget.schedule(this)
         Alerts.scheduleMorning(this)
     }
 
     override fun onRequestPermissionsResult(r: Int, p: Array<out String>, g: IntArray) = load()
+
+    // 설정 화면에서 권한을 바꾸고 돌아오면 안내 줄과 위치를 다시 맞춘다
+    override fun onResume() {
+        super.onResume()
+        if (started) Repo.cached(this)?.let(::show)
+        started = true
+    }
+    private var started = false
+
+    private fun has(p: String) = checkSelfPermission(p) == android.content.pm.PackageManager.PERMISSION_GRANTED
+
+    /** 위치가 제대로 따라가려면 필요한 권한 중 빠진 것을 버튼으로 보여 준다 */
+    private fun permissionHints(s: Snapshot) {
+        val appSettings = android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+            android.net.Uri.parse("package:$packageName"))
+        fun hint(msg: String, label: String, go: () -> Unit) = body.addView(card(
+            text(msg, 14f, 0xFFFFD27A.toInt()),
+            Button(this).apply { text = label; setOnClickListener { go() } }))
+        val fg = has(Manifest.permission.ACCESS_FINE_LOCATION) || has(Manifest.permission.ACCESS_COARSE_LOCATION)
+        when {
+            !fg -> hint("위치 권한이 없어 ${s.place} 기준 날씨입니다. 지금 있는 동네로 보려면 위치를 허용하세요.", "위치 허용") {
+                if (shouldShowRequestPermissionRationale(Manifest.permission.ACCESS_FINE_LOCATION) || !asked())
+                    requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION), 1)
+                else startActivity(appSettings) // 두 번 거부하면 시스템 창이 더 뜨지 않는다
+            }
+            !has(Manifest.permission.ACCESS_BACKGROUND_LOCATION) ->
+                hint("위젯·아침 안내는 앱을 마지막으로 연 곳 기준입니다. 이동해도 따라가게 하려면 위치를 '항상 허용'으로 바꾸세요.", "항상 허용으로 바꾸기") {
+                    // Android 11+: 백그라운드 위치는 시스템이 설정 화면으로 보낸다
+                    requestPermissions(arrayOf(Manifest.permission.ACCESS_BACKGROUND_LOCATION), 2)
+                }
+        }
+        if (!getSystemService(android.app.NotificationManager::class.java).areNotificationsEnabled())
+            hint("알림이 꺼져 있어 상태바 날씨·아침 안내·특보가 오지 않습니다.", "알림 켜기") {
+                if (!asked("notif")) requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 3)
+                else startActivity(android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                    .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, packageName))
+            }
+        val pm = getSystemService(android.os.PowerManager::class.java)
+        if (!pm.isIgnoringBatteryOptimizations(packageName))
+            hint("배터리 최적화 때문에 위젯 갱신·7시 안내가 늦거나 멈출 수 있습니다. (삼성: '절전 예외 앱'에 추가)", "배터리 제한 해제") {
+                startActivity(appSettings)
+            }
+    }
+
+    /** 처음 한 번은 시스템 권한 창, 그 뒤로는 설정 화면 */
+    private fun asked(k: String = "loc") = getSharedPreferences("perm", MODE_PRIVATE).run {
+        getBoolean(k, false).also { edit().putBoolean(k, true).apply() }
+    }
 
     /** 앱을 열 때는 캐시가 신선하면 네트워크를 쓰지 않는다. 새로고침 버튼만 force */
     private fun load(force: Boolean = false) = Thread {
@@ -61,6 +109,7 @@ class MainActivity : Activity() {
         body.removeAllViews()
         window.decorView.setBackgroundResource(Wx.bg(s.code, s.isDay).let { if (it == R.drawable.bg_day) R.drawable.bg_day else it })
         body.addView(text(s.place, 18f, bold = true))
+        permissionHints(s)
         if (s.warnings.isNotEmpty()) body.addView(text("기상청 특보: " + s.warnings.joinToString(", ") + " 발효 중", 15f, 0xFFFFD27A.toInt(), bold = true))
         body.addView(LinearLayout(this).apply {
             gravity = Gravity.CENTER_VERTICAL
