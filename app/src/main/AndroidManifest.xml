@@ -13,6 +13,8 @@
     <application android:label="오늘날씨" android:icon="@drawable/ic_app"
         android:allowBackup="false"
         android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
+        <activity android:name=".SettingsActivity" android:exported="false"
+            android:label="설정" android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize" />
         <activity android:name=".MainActivity" android:exported="true"
             android:resizeableActivity="true"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden">

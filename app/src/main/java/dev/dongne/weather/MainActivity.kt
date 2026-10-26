@@ -2,14 +2,11 @@ package dev.dongne.weather
 
 import android.Manifest
 import android.app.Activity
-import android.appwidget.AppWidgetManager
-import android.content.ComponentName
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.view.Gravity
 import android.view.View
-import android.widget.Button
 import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -37,7 +34,7 @@ class MainActivity : Activity() {
         })
         Repo.cached(this)?.let(::show) ?: body.addView(text("불러오는 중…", 18f))
         if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != 0)
-            { asked(); asked("notif"); requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.POST_NOTIFICATIONS), 1) }
+            { SettingsActivity.asked(this, "loc"); SettingsActivity.asked(this, "notif"); requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.POST_NOTIFICATIONS), 1) }
         else load()
         GlanceWidget.schedule(this)
         Alerts.scheduleMorning(this)
@@ -52,46 +49,6 @@ class MainActivity : Activity() {
         started = true
     }
     private var started = false
-
-    private fun has(p: String) = checkSelfPermission(p) == android.content.pm.PackageManager.PERMISSION_GRANTED
-
-    /** 위치가 제대로 따라가려면 필요한 권한 중 빠진 것을 버튼으로 보여 준다 */
-    private fun permissionHints(s: Snapshot) {
-        val appSettings = android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-            android.net.Uri.parse("package:$packageName"))
-        fun hint(msg: String, label: String, go: () -> Unit) = body.addView(card(
-            text(msg, 14f, 0xFFFFD27A.toInt()),
-            Button(this).apply { text = label; setOnClickListener { go() } }))
-        val fg = has(Manifest.permission.ACCESS_FINE_LOCATION) || has(Manifest.permission.ACCESS_COARSE_LOCATION)
-        when {
-            !fg -> hint("위치 권한이 없어 ${s.place} 기준 날씨입니다. 지금 있는 동네로 보려면 위치를 허용하세요.", "위치 허용") {
-                if (shouldShowRequestPermissionRationale(Manifest.permission.ACCESS_FINE_LOCATION) || !asked())
-                    requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION), 1)
-                else startActivity(appSettings) // 두 번 거부하면 시스템 창이 더 뜨지 않는다
-            }
-            !has(Manifest.permission.ACCESS_BACKGROUND_LOCATION) ->
-                hint("위젯·아침 안내는 앱을 마지막으로 연 곳 기준입니다. 이동해도 따라가게 하려면 위치를 '항상 허용'으로 바꾸세요.", "항상 허용으로 바꾸기") {
-                    // Android 11+: 백그라운드 위치는 시스템이 설정 화면으로 보낸다
-                    requestPermissions(arrayOf(Manifest.permission.ACCESS_BACKGROUND_LOCATION), 2)
-                }
-        }
-        if (!getSystemService(android.app.NotificationManager::class.java).areNotificationsEnabled())
-            hint("알림이 꺼져 있어 상태바 날씨·아침 안내·특보가 오지 않습니다.", "알림 켜기") {
-                if (!asked("notif")) requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 3)
-                else startActivity(android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
-                    .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, packageName))
-            }
-        val pm = getSystemService(android.os.PowerManager::class.java)
-        if (!pm.isIgnoringBatteryOptimizations(packageName))
-            hint("배터리 최적화 때문에 위젯 갱신·7시 안내가 늦거나 멈출 수 있습니다. (삼성: '절전 예외 앱'에 추가)", "배터리 제한 해제") {
-                startActivity(appSettings)
-            }
-    }
-
-    /** 처음 한 번은 시스템 권한 창, 그 뒤로는 설정 화면 */
-    private fun asked(k: String = "loc") = getSharedPreferences("perm", MODE_PRIVATE).run {
-        getBoolean(k, false).also { edit().putBoolean(k, true).apply() }
-    }
 
     /** 앱을 열 때는 캐시가 신선하면 네트워크를 쓰지 않는다. 새로고침 버튼만 force */
     private fun load(force: Boolean = false) = Thread {
@@ -116,8 +73,22 @@ class MainActivity : Activity() {
     private fun show(s: Snapshot) {
         body.removeAllViews()
         window.decorView.setBackgroundResource(Wx.bg(s.code, s.isDay).let { if (it == R.drawable.bg_day) R.drawable.bg_day else it })
-        body.addView(text(s.place, 18f, bold = true))
-        permissionHints(s)
+        // 상단: 동네 이름 · 새로고침 · 설정
+        body.addView(LinearLayout(this).apply {
+            gravity = Gravity.CENTER_VERTICAL
+            addView(text(s.place, 20f, bold = true).apply { layoutParams = LinearLayout.LayoutParams(0, -2, 1f) })
+            fun icon(t: String, d: String, go: () -> Unit) = text(t, 22f).apply {
+                contentDescription = d; gravity = Gravity.CENTER; minWidth = px(48); minHeight = px(48)
+                setBackgroundResource(android.R.drawable.list_selector_background); setOnClickListener { go() }
+            }
+            addView(icon("⟳", "새로고침") { Toast.makeText(this@MainActivity, "새로고침 중…", Toast.LENGTH_SHORT).show(); load(force = true) })
+            addView(icon("⚙", "설정") { startActivity(android.content.Intent(this@MainActivity, SettingsActivity::class.java)) })
+        })
+        SettingsActivity.issues(this).takeIf { it > 0 }?.let { n ->
+            body.addView(card(text(if (n == 1) "설정에서 확인할 항목이 있습니다 ›" else "설정에서 확인할 항목 ${n}개 ›", 14f, 0xFFFFD27A.toInt(), bold = true)).apply {
+                setOnClickListener { startActivity(android.content.Intent(this@MainActivity, SettingsActivity::class.java)) }
+            })
+        }
         if (s.warnings.isNotEmpty()) body.addView(text("기상청 특보: " + s.warnings.joinToString(", ") + " 발효 중", 15f, 0xFFFFD27A.toInt(), bold = true))
         body.addView(LinearLayout(this).apply {
             gravity = Gravity.CENTER_VERTICAL
@@ -210,27 +181,6 @@ class MainActivity : Activity() {
                 cell("일출 / 일몰", "${s.sunrise} / ${s.sunset}")),
         ))
 
-        // 정확한 알람이 꺼져 있으면 아침 안내가 몇 분 늦을 수 있다 — 켜는 곳으로 바로 보낸다
-        if (!getSystemService(android.app.AlarmManager::class.java).canScheduleExactAlarms())
-            body.addView(Button(this).apply {
-                text = "아침 7시 정각 안내 켜기 (알람 및 리마인더 허용)"
-                layoutParams = LinearLayout.LayoutParams(-1, -2).apply { topMargin = px(14) }
-                setOnClickListener {
-                    startActivity(android.content.Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
-                        android.net.Uri.parse("package:$packageName")))
-                }
-            })
-
-        body.addView(LinearLayout(this).apply {
-            layoutParams = LinearLayout.LayoutParams(-1, -2).apply { topMargin = px(14) }
-            addView(Button(this@MainActivity).apply { text = "새로고침"; setOnClickListener { load(force = true) }; layoutParams = LinearLayout.LayoutParams(0, -2, 1f) })
-            addView(Button(this@MainActivity).apply {
-                text = "홈 화면에 위젯 추가"; layoutParams = LinearLayout.LayoutParams(0, -2, 1f)
-                setOnClickListener {
-                    getSystemService(AppWidgetManager::class.java).requestPinAppWidget(ComponentName(this@MainActivity, GlanceWidget::class.java), null, null)
-                }
-            })
-        })
         body.addView(text("업데이트 " + SimpleDateFormat("M/d HH:mm", Locale.KOREA).format(Date(s.fetchedAt)) + " · ${s.source}" + (if (s.observed) " · 현재 기온 기상청 관측" else "") + (if (s.airSource.isNotEmpty()) " · 대기질 ${s.airSource}" else "") + " · Weather data by Open-Meteo.com (CC BY 4.0) · 광고 없음", 11f, 0x88FFFFFF.toInt()).apply { setPadding(0, px(10), 0, 0) })
     }
 }

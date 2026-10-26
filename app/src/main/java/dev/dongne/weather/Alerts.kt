@@ -30,8 +30,10 @@ object Alerts {
 
     /** 다음 아침 7:00 정각 (도즈 중에도) */
     fun scheduleMorning(c: Context) {
+        val am0 = c.getSystemService(AlarmManager::class.java)
+        if (!Settings.morningOn(c)) { am0.cancel(pi(c)); return }
         val now = LocalDateTime.now(SEOUL)
-        var at = now.toLocalDate().atTime(7, 0)
+        var at = now.toLocalDate().atTime(Settings.morningHour(c), 0)
         if (!at.isAfter(now)) at = at.plusDays(1)
         val ms = at.atZone(SEOUL).toInstant().toEpochMilli()
         val am = c.getSystemService(AlarmManager::class.java)
@@ -44,6 +46,7 @@ object Alerts {
 
     /** 아침 7시: 결론(비·옷차림) 먼저, 인사말·이모지 없음 */
     fun morning(c: Context, s: Snapshot) {
+        if (!Settings.morningOn(c)) return
         val now = LocalDateTime.now(SEOUL)
         val o = Outfits.plan(s, now.monthValue, now.hour)
         val title = listOfNotNull(o.rain?.substringBefore(" ("), o.headline).joinToString(" / ")
@@ -102,6 +105,7 @@ object Alerts {
 
     /** 비·눈이 1~2시간 안에 시작하면 한 번(구간 시작 시각마다). 6~22시만 */
     fun rainSoon(c: Context, s: Snapshot) {
+        if (!Settings.rainOn(c)) return
         val now = LocalDateTime.now(SEOUL)
         if (now.hour !in 6..22) return
         val u = Next.upcoming(s, within = 2) ?: return
@@ -119,7 +123,7 @@ object Alerts {
 
     private fun channels(nm: NotificationManager) = nm.createNotificationChannels(listOf(
         NotificationChannel(CH, "기상 특보·위험 기온", NotificationManager.IMPORTANCE_HIGH),
-        NotificationChannel(CH_MORNING, "아침 7시 옷차림·비 안내", NotificationManager.IMPORTANCE_DEFAULT),
+        NotificationChannel(CH_MORNING, "아침 옷차림·비 안내", NotificationManager.IMPORTANCE_DEFAULT),
         NotificationChannel(CH_RAIN, "비·눈 시작 1~2시간 전", NotificationManager.IMPORTANCE_DEFAULT),
     ))
 

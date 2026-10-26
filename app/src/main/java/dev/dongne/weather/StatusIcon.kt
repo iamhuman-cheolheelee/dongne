@@ -49,6 +49,7 @@ object StatusIcon {
 
     fun post(c: Context, s: Snapshot) {
         val nm = c.getSystemService(NotificationManager::class.java)
+        if (!Settings.statusOn(c)) { nm.cancel(ID); return }
         if (!nm.areNotificationsEnabled()) return
         nm.createNotificationChannel(NotificationChannel(CH, "현재 기온(상태바)", NotificationManager.IMPORTANCE_LOW).apply {
             setShowBadge(false); setSound(null, null); enableVibration(false)

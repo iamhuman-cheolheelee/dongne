@@ -1,0 +1,1 @@
+New Settings screen (⚙): location, notifications, widget, battery. Morning brief on/off and time, rain-soon alerts, status bar temperature toggles.
