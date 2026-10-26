@@ -15,7 +15,7 @@ val keystore = rootProject.file("keystore.properties").takeIf { it.exists() }?.l
 android {
     namespace = "dev.dongne.weather"
     compileSdk = 35
-    defaultConfig { applicationId = "dev.dongne.weather"; minSdk = 31; targetSdk = 35; versionCode = 5; versionName = "1.4.0" }
+    defaultConfig { applicationId = "dev.dongne.weather"; minSdk = 31; targetSdk = 35; versionCode = 6; versionName = "1.4.1" }
     signingConfigs {
         if (keystore != null) create("release") {
             storeFile = file(keystore.getProperty("storeFile"))

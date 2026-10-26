@@ -227,7 +227,9 @@ object Repo {
             val k = kd[dt.getString(i)] ?: return@map base
             val hs = local!!.hours.filter { it.date == dt.getString(i) }
             // 시간별이 있는 날(단기)은 시간별에서, 없는 날(중기 4~10일)은 기상청 오전·오후 값에서
-            base.copy(max = k.max ?: base.max, min = k.min ?: base.min,
+            // 일 최고·최저가 그날 시간별 기온 범위를 벗어나면 안 된다 (발표 시각에 따라 일 값이 다른 날 것이거나 낡은 경우)
+            val kMax = k.max ?: base.max; val kMin = k.min ?: base.min
+            base.copy(max = maxOf(kMax, hs.maxOfOrNull { it.temp } ?: kMax), min = minOf(kMin, hs.minOfOrNull { it.temp } ?: kMin),
                 pop = hs.maxOfOrNull { it.pop } ?: k.pop.takeIf { it >= 0 } ?: base.pop,
                 code = hs.filter { it.hour in 6..21 }.map { it.code }.maxOrNull()?.takeIf { it >= 0 }
                     ?: k.code.takeIf { it >= 0 } ?: base.code,
@@ -250,16 +252,19 @@ object Repo {
         val fcCode = kNow?.code?.takeIf { it >= 0 } ?: cCode
         // 지금 비가 실제로 내리고 있는데(1시간 강수량 > 0) 예보 날씨가 맑음·흐림이면 약한 비로 고친다
         val code = if ((obs?.rain1h ?: 0.0) > 0 && fcCode < 51) 61 else fcCode
+        val nowTemp = obs?.temp?.roundToInt() ?: kNow?.temp ?: cTemp.roundToInt()
+        // 오늘 최고·최저는 지금 실측 기온도 포함해야 한다 (현재 21° 인데 최고 16° 로 보이는 문제)
+        val week = days.mapIndexed { i, d -> if (i == 0) d.copy(max = maxOf(d.max, nowTemp), min = minOf(d.min, nowTemp)) else d }
         return Snapshot(place,
-            obs?.temp?.roundToInt() ?: kNow?.temp ?: cTemp.roundToInt(),
+            nowTemp,
             obs?.let { (it.feels ?: it.temp).roundToInt() } ?: kNow?.feels ?: cFeels.roundToInt(),
             code, cDay,
             obs?.rh ?: kNow?.rh ?: cRh, obs?.wind ?: kNow?.wind ?: cWind,
-            days[0].max, days[0].min, dcol("temperature_2m_max").getDouble(y).roundToInt(),
+            week[0].max, week[0].min, dcol("temperature_2m_max").getDouble(y).roundToInt(),
             dcol("uv_index_max").optDouble(today, 0.0),
             dcol("sunrise").getString(today).takeLast(5), dcol("sunset").getString(today).takeLast(5),
             air?.pm10 ?: -1, air?.pm25 ?: -1,
-            hours, days, fetchedAt, yMin,
+            hours, week, fetchedAt, yMin,
             local?.source ?: OpenMeteo.NAME,
             drop = yMin - dcol("temperature_2m_min").getDouble(today).roundToInt(),
             airSource = air?.source ?: "",

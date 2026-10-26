@@ -1,0 +1,1 @@
+Fixed today's high/low disagreeing with current and hourly temperatures.
